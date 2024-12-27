@@ -164,8 +164,6 @@
         }
 
         function showMinimalPath(inputString) {
-            // 'source': '/Users/billhorn/code/python/temp/pythonvuln02.git20240217235712/sql_postgres_01.py',
-            // 'source': 'https://github.com/williamhorn100/pythonvuln02.git',
             const form = document.getElementById("bodyform");
             const giturlTextarea = form.elements["giturl"];
             const giturlValue = giturlTextarea.value;
@@ -349,7 +347,6 @@
             const data = await response.json();
             for (const key in data) {
                 if (key == "messageContent") {
-                    //alert(data[key]);
                     deepInspectionContent.innerHTML = data[key];
                 }
             }
