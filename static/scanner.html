@@ -1,3 +1,498 @@
+<!DOCTYPE html>
 <html>
-  
+<head>
+    <title>Code Repo Security Scanner</title>
+    <style>
+        body {
+          font-family: sans-serif;
+          color: #d6d6d6;
+          background-color: #434343;
+        }
+        textarea {
+            width: 78%;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            box-sizing: border-box; /* Ensures padding is included in the width */
+            resize: vertical; /* Allows vertical resizing */
+            font-size: 16px;
+        }
+        button {
+            padding: 10px 20px;
+            vertical-align: top;
+            height: 60px;
+            border: none;
+            border-radius: 8px;
+            background-color: #007bff; /* Blue color */
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s ease; /* Smooth transition for hover effect */
+        }
+        button:hover {
+            background-color: #0056b3; /* Darker blue color on hover */
+        }
+        table {
+          
+          border: 1px solid black;
+          margin-bottom: 16px;
+          background-color: #262626;
+          border-radius: 8px;
+          width: 97%;
+        }
+        
+        /* Optional: Add some padding and margin to the table cells for better readability */
+        td, th {
+          padding: 10px;
+          white-space: pre-wrap;
+        }
+        .fileNameTd {
+            border-top-left-radius: 6px;
+            border-top-right-radius: 6px;
+            font-weight: bolder;
+            background-color: #214466;
+            width: 100%;
+        }
+        .buttonCell {
+            padding: 1px;
+        }
+        .buttonCellButton {
+            border-top-left-radius: 0px;
+            border-top-right-radius: 6px;
+            border-bottom-left-radius: 0px;
+            border-bottom-right-radius: 6px;
+            font-weight: bolder;
+        }
+        .loading-bar {
+            width: 100%;
+            height: 5px;
+            background-color: #ccc;
+            position: relative;
+        }
+        .progress {
+            width: 0;
+            height: 100%;
+            background-color: #007bff;
+            position: absolute;
+            top: 0;
+            left: 0;
+            animation: progress-animation 2s linear infinite;
+        }
+
+        @keyframes progress-animation {
+            0% { width: 0; }
+            100% { width: 100%; }
+        }
+        .highlighted {
+            font-weight: bolder;
+            text-decoration: underline;
+        }
+        .hiddenDiv {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #f0f0f0;
+            width: 60%;
+            height: 60%;
+            overflow: auto;
+            padding: 20px;
+            border: 1px solid #ccc;
+            z-index: 9999;
+            box-sizing: border-box;
+            background-color: #0151a7;
+            border: solid 2px #262626;
+            border-radius: 6px;
+        }
+        .ui-dialog {
+            position: absolute;
+            top: 0;
+            left: 0;
+            padding: .2em;
+            outline: 0;
+            background-color: #434343;
+            border: solid 2px #262626;
+            border-radius: 6px;
+        }
+        .ui-dialog .ui-dialog-titlebar {
+            padding: .4em 1em;
+            position: relative;
+            border-bottom: solid 1px #262626;
+        }
+        .ui-dialog .ui-dialog-titlebar-close {
+            position: absolute;
+            right: .3em;
+            top: 50%;
+            width: 20px;
+            margin: -10px 0 0 0;
+            padding: 1px;
+            height: 20px;
+        }
+        .ui-dialog .ui-dialog-content {
+            position: relative;
+            border: 0;
+            padding: .5em 1em;
+            background: none;
+            overflow: auto;
+        }
+        .ui-dialog .ui-dialog-buttonpane {
+            text-align: left;
+            border-width: 1px 0 0 0;
+            background-image: none;
+            margin-top: .5em;
+            padding: .3em 1em .5em .4em;
+        }
+        .ui-dialog .ui-dialog-buttonpane .ui-dialog-buttonset {
+            float: right;
+        }
+        .ui-dialog .ui-dialog-buttonpane button {
+            margin: .5em .4em .5em 0;
+            cursor: pointer;
+        }
+        .center-content {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+        </style>
+    <script>
+        var iterations = 0;
+        var currentBlockProcessNum = 0;
+        var completionsArray = [];
+        var wordsToHighlight = ['SQL Injection', 'File Injection', 'Command Injection', 'Code Injection','XSS', 'CSSRF','credentials', 'leaked', 'backdoor', 'Insufficient', 'Summary', 'Implementation', 'Analysis'];
+        
+        function highlightWordsInTd(element) {
+            wordsToHighlight.forEach(function(word) {
+                var regex = new RegExp('\\b' + word + '\\b', 'gi');
+                element.innerHTML = element.innerHTML.replace(regex, '<span class="highlighted">$&</span>');
+                });
+        }
+
+        function showMinimalPath(inputString) {
+            const form = document.getElementById("bodyform");
+            const giturlTextarea = form.elements["giturl"];
+            const giturlValue = giturlTextarea.value;
+
+            displayString = "";
+            if (inputString.includes(giturlValue)) {
+                displayString = inputString.replace(giturlValue, '');
+            } else {
+                displayString =inputString;
+            }
+            return displayString;
+        }
+
+        async function postData() {
+            iterations = 0;
+            currentBlockProcessNum = 0;
+            completionsArray = [];
+            
+            document.getElementById("findingsResultsCell").innerHTML = "Scanning...";
+            var reportOutput = document.getElementById("reportOutput");
+            while(reportOutput.firstChild) {
+                reportOutput.removeChild(reportOutput.firstChild);
+            }
+            const form = document.getElementById("bodyform");
+            const giturlTextarea = form.elements["giturl"];
+            const giturlValue = giturlTextarea.value;
+
+            const item = {
+                "url": giturlValue,
+                "numItems": 0,
+                "message": ""
+            };
+            const blob = new Blob([item], { type: 'application/json' });
+            const response = await fetch('http://localhost:8000/items/', {
+                method: 'POST',
+                headers: {
+                    'Content-Length': blob.size,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(item)
+            });
+            const data = await response.json();  
+            for (const key in data) {
+                if (key == "message") {
+                    message = data[key];
+                    if (message == "") {
+                        retrieveInspectionsLoop(data);
+                    } else {
+                        alert(message);
+                    }
+                }
+            }  
+        }
+
+        function retrieveInspectionsLoop(data) {
+            for (const key in data) {
+                if (key == "numItems") {
+                    iterations = data[key];
+                    if (iterations > 0) {
+                        if (iterations > 100) {
+                            var result = confirm("More than 100 blocks. Are you sure you want to continue?");
+                            if (result == false) {
+                                return;
+                            } else {
+                                for (let i=0; i<iterations; i++) {
+                                    completionsArray.push(0);
+                                }
+                                totCountSpn = document.getElementById("total-counter");
+                                totCountSpn.innerHTML = iterations;
+                                progressArea = document.getElementById("progress-area");
+                                progressArea.style.display = "block";
+                            }
+                        }
+                    }
+                }
+            }
+            for (let i=0; i<iterations; i++) {
+                completionsArray.push(0);
+                buildOutContainers(i);  // will call retrieveInspectionsStream(i)
+            }
+            console.log("completionsArray: ");
+            console.log(completionsArray);
+        }
+        
+        async function buildOutContainers(iterationNum) {
+            const item = {
+                "iterationNum": iterationNum,
+                "metadataSource": "",
+                "messageContent": "",
+                "beginingWith": "",
+                "codeLanguage": "",
+            };
+            const blob = new Blob([item], { type: 'application/json' });
+            const response = await fetch('http://localhost:8000/buildOutContainers/', {
+                method: 'POST',
+                headers: {
+                    'Content-Length': blob.size,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(item)
+            });
+            const data = await response.json();
+            console.log(data);
+            appendTables(data);
+        }
+
+        // async function retrieveInspections(iterationNum) {
+        //     const item = {
+        //         "iterationNum": iterationNum,
+        //         "metadataSource": "",
+        //         "messageContent": "",
+        //         "beginingWith": "",
+        //         "codeLanguage": "",
+        //     };
+        //     const blob = new Blob([item], { type: 'application/json' });
+        //     const response = await fetch('http://localhost:8000/retrieveInspections/', {
+        //         method: 'POST',
+        //         headers: {
+        //             'Content-Length': blob.size,
+        //             'Content-Type': 'application/json'
+        //         },
+        //         body: JSON.stringify(item)
+        //     });
+        //     const data = await response.json();
+        //     console.log(data);
+        //     appendTables(data);
+        // }
+
+        async function retrieveInspectionsStream(iterationNum) {
+            // TODO: Remove need to have a table created and shown
+            // document.getElementById("containerTable" + iterationNum).style.display = "block";
+            const item = {
+                "iterationNum": iterationNum,
+                "metadataSource": "",
+                "messageContent": "",
+                "beginingWith": "",
+                "codeLanguage": "",
+            };
+            const blob = new Blob([item], { type: 'application/json' });
+            const response = await fetch('http://localhost:8000/retrieveInspectionsStream/', {
+                method: 'POST',
+                headers: {
+                    'Content-Length': blob.size,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(item)
+            });
+            const data = await response.json();
+            //console.log(data);
+            htmlResults = "";
+            for (const key in data) {
+                    vulnObject = data[key];
+                    vulnTypeCount = vulnObject["count"];
+                    vulnType = vulnObject["vulnerability"];
+                    htmlResults += vulnTypeCount + " - " + vulnType + " \n";
+            }
+            document.getElementById("findingsResultsCell").innerHTML = htmlResults;
+            completionsArray[iterationNum] = 1;
+            console.log("completionsArray: ");
+            console.log(completionsArray);
+            numCompletes = 0;
+            for (let i=0; i<completionsArray.length; i++) {
+                numCompletes += completionsArray[i];
+            }
+            console.log("numCompletes: ");
+            console.log(numCompletes);
+            percentComplete = Math.round((numCompletes / iterations) * 100);
+            console.log("percentComplete: ");
+            console.log(percentComplete);
+            document.getElementById("scanProgress").innerHTML = "(Progress: " + percentComplete + "%)";
+        }
+
+        async function downloadCSV() {
+            var deepInspectionDiv = document.getElementById("deepInspectionDiv");
+            deepInspectionDiv.style.display = "block";
+
+            var deepInspectionContent = document.getElementById("deepInspectionContent");
+
+            var selection = window.getSelection();
+            var selectedText = "";
+            if (selection && selection.toString().trim() !== '') {
+                selectedText = selection.toString();
+                console.log("Selected text: ", selectedText);
+            }
+            const item = {
+                "selectedText": selectedText,
+                "messageContent": ""
+            };
+            const blob = new Blob([item], { type: 'application/json' });
+            const response = await fetch('http://localhost:8000/downloadCSV/', {
+                method: 'POST',
+                headers: {
+                    'Content-Length': blob.size,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(item)
+            });
+            const data = await response.json();
+            for (const key in data) {
+                if (key == "messageContent") {
+                    deepInspectionContent.innerHTML = data[key];
+                }
+            }
+        }
+        
+        function hideDeepInspectionDiv() {
+            var deepInspectionContent = document.getElementById("deepInspectionContent");
+            deepInspectionContent.innerHTML = "";
+            var hiddenDiv = document.getElementById("deepInspectionDiv");
+            hiddenDiv.style.display = "none";
+        }
+
+        function appendTables(data) {
+            currentBlockProcessNum = currentBlockProcessNum + 1;
+            curCountSpn = document.getElementById("current-counter");
+            curCountSpn.innerHTML = currentBlockProcessNum;
+            const table = document.createElement('table');
+            table.style.display = "none";
+            iterationNum = 0;
+            codeLanguage = "";
+            for (const key in data) {
+                if (key == "iterationNum") {
+                    iterationNum = data[key];
+                }
+                if (key == "codeLanguage") {
+                    codeLanguage = data[key];
+                }
+            }
+            table.setAttribute('id', 'containerTable' + iterationNum);
+            for (const key in data) {
+                if (key == "metadataSource") {
+                    const row = document.createElement('tr');
+                    const valueCell = document.createElement('td');
+                    valueCell.setAttribute("class", "fileNameTd");
+                    objMDS = data[key]
+                    for (const subkey in objMDS) {
+                        if (subkey == "source") {
+                            fileName = showMinimalPath(objMDS[subkey])
+                            valueCell.textContent = fileName
+                        }
+                    }
+                    const buttonsCell = document.createElement('td');
+                    buttonsCell.setAttribute("width", "40");
+                    buttonsCell.style.padding = "2px";
+                    buttonsCell.innerHTML = "<button type=\"button\" class=\"buttonCellButton\" onclick=\"downloadCSV()\">⍗</button>"; //currentBlockProcessNum;
+                    row.appendChild(valueCell);
+                    row.appendChild(buttonsCell);
+                    table.appendChild(row);
+                }
+                if (key == "messageContent") {
+                    const row = document.createElement('tr');
+                    const valueCell = document.createElement('td');
+                    valueCell.setAttribute('id', 'containerValueCell' + iterationNum);
+                    valueCell.setAttribute("colspan", "2");
+                    valueCell.textContent = "" //data[key] //make sure to use white-space: pre; in the css
+                    highlightWordsInTd(valueCell);
+                    row.appendChild(valueCell);
+                    table.appendChild(row);
+                }
+                if (key == "beginingWith") {
+                    const row = document.createElement('tr');
+                    const valueCell = document.createElement('td');
+                    valueCell.setAttribute("colspan", "2");
+                    valueCell.textContent = "found near: " + data[key];
+                    valueCell.style.fontStyle = 'italic';
+                    valueCell.style.color = "gray";
+                    row.appendChild(valueCell);
+                    table.appendChild(row);
+                }
+            }
+            var reportOutput = document.getElementById("reportOutput");
+            // TODO: Skip adding any tables and store what is needed in a variable
+            table.style.display = "none";
+            reportOutput.appendChild(table)
+            retrieveInspectionsStream(iterationNum)
+            if (currentBlockProcessNum == iterations) {
+                progressArea = document.getElementById("progress-area");
+                progressArea.style.display = "none";
+            }
+        }
+
+        window.onload = function() {
+            var progressBar = document.querySelector('.loading-bar');
+            var progress = document.createElement('div');
+            progress.className = 'progress';
+            progressBar.appendChild(progress);
+        };
+        
+    </script>
+</head>
+<body>
+    <H1>Code Repo Security Scanner</H1>
+    <form id="bodyform">
+        <textarea id="giturl">/Users/Shared/repo</textarea>
+        <button type="button" onclick="postData()">Inspect Git Repo</button>
+        <br><br>
+        <table id="findingsResultsTable" style="display: block;">
+            <tr>
+                <td class="fileNameTd">Findings</td>
+                <td width="40" style="padding: 2px;"><button type="button" class="buttonCellButton" onclick="downloadCSV()">⍗</button></td>
+            </tr>
+            <tr>
+                <td id="findingsResultsCell" colspan="2"></td>
+            </tr>
+            <tr>
+                <td colspan="2" style="font-style: italic; color: gray;"><span id="scanProgress" style="font-style: italic;">(Progress: 0%)</span></td>
+            </tr>
+        </table>
+        <div id="progress-area" style="width: 200px; display: none;">
+            <div>Processing blocks: <span id="current-counter">1</span> of <span id="total-counter">1</span></div>
+            <div class="loading-bar"></div>
+        </div>
+    </form>
+    <br />
+    <div id="reportOutput">
+        <div style="text-align: center;">(Click the 'Inspect Git Repo' above to get started)</div>
+    </div>
+    <div id="deepInspectionDiv" class="hiddenDiv" oldClas="ui-dialog ui-corner-all ui-widget ui-widget-content ui-front ui-dialog-buttons ui-draggable ui-resizable" oldStyle="position: fixed; height: auto; width: 500px; top: 15%; left: 25%; z-index: 101;">
+        <div style="padding-bottom: 4px;" class="ui-dialog-titlebar ui-corner-all ui-widget-header ui-helper-clearfix ui-draggable-handle"><span id="ui-id-1" class="ui-dialog-title"><div class="center-content"><b>Message</b></div></span></div>
+        <div id="deepInspectionContent" style="height: 85%; width:98%; padding: 2px 10px 2px 10px; overflow-y: scroll; white-space: pre-wrap; border-top: solid 1px #434343; border-bottom: solid 1px #434343;">
+        </div>
+        <div class="center-content"><button id="closeButton" style="margin-top: 8px; height: 70%" onclick="hideDeepInspectionDiv()">Close</button></div>
+      </div>
+</body>
 </html>
