@@ -2,6 +2,7 @@
 Author: William Horn
 
 Leveraging Generative AI to Automate Source Code Inspection
+
 ![alt text](https://github.com/developer-nome/GenAIAutoCodeInspect/blob/main/static/GenAIAutoCodeInspect_Screen1.jpg)
 ![alt text](https://github.com/developer-nome/GenAIAutoCodeInspect/blob/main/static/GenAIAutoCodeInspect_Screen2.jpg)
 
